@@ -1,6 +1,12 @@
+import java.awt.Frame;
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
 import java.net.URL;
+import java.security.KeyStore.Entry;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.HashMap;
+import java.util.LinkedList;
 
 import org.jbox2d.collision.CircleShape;
 import org.jbox2d.collision.PolygonShape;
@@ -18,6 +24,7 @@ public class TestPinata extends PApplet {
 
 	class UserData {
 		public int image;
+		public String text = "Lorem Ipsum";
 		public String name = "Random Guest";
 		
 		public UserData() {
@@ -45,14 +52,19 @@ public class TestPinata extends PApplet {
 	private int points = 0;
 	
 	private PImage img, img2, img3;
-	private int time;
+	private int time, throwtime;
+
+	private HashMap<String, Integer> highscore;
 	
 	public void setup() {
 		size(800, 480);
 		frameRate(60);
 		smooth();
 
-		time = millis();
+		tweets = new LinkedList<>();
+		highscore = new HashMap<>();
+		
+		time = throwtime = millis();
 		
 		img = loadImage("blaues_monster1.png");
 		img.resize(32, 32);
@@ -73,8 +85,21 @@ public class TestPinata extends PApplet {
 		twitterReader();
 	}
 
-	public void twitterReader() {
-		String urlst = "http://search.twitter.com/search.json?q=%23PiniataCookie";
+	class Tweet {
+		public String name;
+		public String text;
+		public void Tweet(String n, String t) {name = n; text = t;}
+		public String toString() {
+			return name;
+		}
+	}
+	private long lastTweet = 0;
+	private LinkedList<Tweet> tweets;
+	private boolean firstRun = true;
+	
+	public void twitterReader() { //PiniataCookie
+		//Bieber stress test!
+		String urlst = "http://search.twitter.com/search.json?q=Bieber";
 		URL url;
 		StringBuffer buff = new StringBuffer(); 
 		try {
@@ -88,16 +113,24 @@ public class TestPinata extends PApplet {
 	        }  
 	        br.close();
 	        
-	        System.out.println(buff.toString());
+	        //System.out.println(buff.toString());
 	        
 	        JSONObject js = new JSONObject(buff.toString());
 	        JSONArray tweets = js.getJSONArray("results");  
 	        JSONObject tweet;  
-	        for(int i=0;i<tweets.length();i++) {  
-	            tweet = tweets.getJSONObject(i);  
-	            System.out.println((i+1)+") "+tweet.getString("from_user")+" at "+tweet.getString("created_at"));  
-	            System.out.println(tweets.getJSONObject(i).getString("text")+"\n");  
+	        for(int i=tweets.length()-1;i>=0;i--) {  
+	            tweet = tweets.getJSONObject(i);
+	            if(lastTweet < Long.parseLong(tweet.getString("id_str"))) {
+	            	lastTweet = Long.parseLong(tweet.getString("id_str"));
+	            	if(!firstRun) {
+	            		Tweet t = new Tweet();
+		            	t.name = tweet.getString("from_user");
+		            	t.text = tweet.getString("text");
+		            	this.tweets.add(t);
+	            	}
+	            }
 		    } 
+	        firstRun = false;
 		} catch (Exception e) {
 			e.printStackTrace();
 		}  
@@ -107,24 +140,26 @@ public class TestPinata extends PApplet {
 		 physics.setDensity(0.0f);
 		 for(int i = 0; i < 13; i++) {
 			 if(i*50 < 550) {
-				 physics.setRestitution(random(0.5f,1.5f));
+				 physics.setRestitution(random(0.5f,0.95f));
 				 physics.createCircle(50+(i*50), 125, 5);
 				 
-				 physics.setRestitution(random(0.5f,1.5f));
+				 physics.setRestitution(random(0.5f,0.95f));
 				 physics.createCircle(25+(i*50), 200, 5);
 				 
-				 physics.setRestitution(random(0.5f,1.5f));
+				 physics.setRestitution(random(0.5f,0.95f));
 				 physics.createCircle(50+(i*50), 275, 5);
 				 
-				 physics.setRestitution(random(0.5f,1.5f));
+				 physics.setRestitution(random(0.5f,0.95f));
 				 physics.createCircle(25+(i*50), 350, 5);
 			 }
 		 }
 	}
 	public void initScene() {
 		physics = new Physics(this, width-200, height);
+//		physics = new Physics(this, width, height, 0.0f, -9.81f, width, height, width, height-100, 1.0f);
 //		physics.createHollowBox(250, 250, 50, 50, 5);
 		world = physics.getWorld();
+	
 		// physics = new Physics(this, width, height, 0.0f, -9.81f, width,
 		// height, width, height-100, 1.0f);
 		physics.setCustomRenderingMethod(this, "myCustomRenderer");
@@ -147,18 +182,41 @@ public class TestPinata extends PApplet {
 		noFill();
 	}
 	
+	public void showHighscore() {
+		
+//		for(Entry entry : highscore.entrySet()) {
+//			
+//		}
+//		
+//		text("1. Platz: "+points, 605, 430);
+//		text("2. Platz: "+points, 605, 440);
+//		text("3. Platz: "+points, 605, 450);
+	}
+	
 	public void myCustomRenderer(World world) {
 
 		// clear the background
-		background(255);//0x666666);
+		background(255);//0x666666)
 
 		if( ((time+10000)-millis()) <= 500) {
-			twitterReader();
+			twitterReader();			
 			time = millis();
+		}
+		
+		if( ((throwtime+6000)-millis()) <= 500) {
+			if(this.tweets.size() > 0) {
+				println(Arrays.toString(this.tweets.toArray()));
+				Tweet t = this.tweets.getFirst();
+				this.tweets.removeFirst();
+				createRandomFromTweet(t.name, t.text, (int)random(25f, 400f), 50);
+			}
+			
+			throwtime = millis();
 		}
 		
 		crosshair();
 		drawPoints();
+		showHighscore();
 		
 		// Show the gravity
 		stroke(255, 128, 0);
@@ -171,8 +229,7 @@ public class TestPinata extends PApplet {
 		//Anzeige rechts ab 600px
 		fill(0);
 		stroke(0);
-		text("Gravity X:"+g.x+"m/s² Y:"+-(g.y)+"m/s²", 605, 10);
-		text("Punkte: "+points, 605, 20);
+		//text("Gravity X:"+g.x+"m/s² Y:"+-(g.y)+"m/s²", 605, 10);
 		
 		noFill();
 		
@@ -217,9 +274,8 @@ public class TestPinata extends PApplet {
 							.getLocalPosition()));
 					float radius = physics.worldToScreen(circle.getRadius());
 
-					checkPoints(world,pos, body);
-					
-					if (ud != null) {					
+					if (ud != null) {		
+						checkPoints(world,pos, body, ud);
 						switch (ud.image) {
 						default:
 							ellipseMode(CENTER);
@@ -288,7 +344,16 @@ public class TestPinata extends PApplet {
 					float radius = physics.worldToScreen(circle.getRadius());
 					
 					if(ud != null) {
+						//Follow Texte
 						followText(ud.name, (int)pos.x, (int)pos.y, 640, 480);
+						
+						if(highscore.get(ud.name) != null) {
+							//Twitter Nachrichten
+							text(ud.name + "("+highscore.get(ud.name)+"): " + ud.text, 605, (int)pos.y);
+						} else {
+							//Twitter Nachrichten
+							text(ud.name + "(0): " + ud.text, 605, (int)pos.y);
+						}
 					}
 				}
 			}
@@ -302,6 +367,18 @@ public class TestPinata extends PApplet {
 		line(crosshairX,crosshairY,crosshairX,crosshairY-30);
 		line(crosshairX,crosshairY,crosshairX+30,crosshairY);
 		line(crosshairX,crosshairY,crosshairX-30,crosshairY);
+	}
+	
+	private void createRandomFromTweet(String name, String text, int x, int y) {
+		UserData ud = new UserData();
+		ud.name = name;
+		ud.text = text;
+		ud.image = (int) (Math.random() * 3)+1;
+
+		physics.setDensity(1.0f);
+		physics.setFriction(1.0f);
+		physics.setRestitution(0.7f);
+		physics.createCircle(x, y, 15).setUserData(ud);
 	}
 	
 	private void createRandom(int x, int y) {
@@ -362,7 +439,7 @@ public class TestPinata extends PApplet {
 		text("Keine",560,425);
 	}
 	
-	public void checkPoints(World world, Vec2 pos, Body body) {
+	public void checkPoints(World world, Vec2 pos, Body body, UserData ud) {
 		
 		//100 Punkte :D
 //		fill(255, 0, 0, 30);
@@ -427,15 +504,35 @@ public class TestPinata extends PApplet {
 		if(collision(pos, p100p, p100s)) {
 			world.destroyBody(body);
 			points += 100;
+			if(highscore.get(ud.name) != null) {
+				highscore.put(ud.name, highscore.get(ud.name) + 100);
+			} else {
+				highscore.put(ud.name, 100);
+			}
 		}else if(collision(pos, p50p1, p50s1) || collision(pos, p50p2, p50s2)) {
 			world.destroyBody(body);
 			points += 50;
+			if(highscore.get(ud.name) != null) {
+				highscore.put(ud.name, highscore.get(ud.name) + 50);
+			} else {
+				highscore.put(ud.name, 50);
+			}
 		}else if(collision(pos, p25p1, p25s1) || collision(pos, p25p2, p25s2)) {
 			world.destroyBody(body);
 			points += 25;
+			if(highscore.get(ud.name) != null) {
+				highscore.put(ud.name, highscore.get(ud.name) + 25);
+			} else {
+				highscore.put(ud.name, 25);
+			}
 		}else if(collision(pos, p0p1, p0s1) || collision(pos, p0p2, p0s2)) {
 			world.destroyBody(body);
 			points += 0;
+			if(highscore.get(ud.name) != null) {
+				highscore.put(ud.name, highscore.get(ud.name) + 0);
+			} else {
+				highscore.put(ud.name, 0);
+			}
 		}
 	}
 	
