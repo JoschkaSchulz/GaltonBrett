@@ -121,8 +121,11 @@ public class TestPinata extends PApplet {
 	
 	private PFont font;
 	
-	public static final int SCREEN_W = 1920;
-	public static final int SCREEN_H = 1080;
+	public static final int SCREEN_W = 800;//1920;
+	public static final int SCREEN_H = 480;//1080;
+	
+	private String hashtag;
+	private int textHeight;
 	
 	public void setup() {
 		//size(320,160);
@@ -135,6 +138,7 @@ public class TestPinata extends PApplet {
 		tweets = new LinkedList<>();
 		playerScores = new HashMap<>();
 		highscore = new Highscore();
+		hashtag = "HAW_Hamburg";
 		
 		time = throwtime = millis();
 		
@@ -148,7 +152,8 @@ public class TestPinata extends PApplet {
 		img3.resize(width/32,width/32);
 		
 		//Font
-		font = createFont("Audiowide-Regular.ttf",width/64);
+		textHeight = width/64;
+		font = createFont("Audiowide-Regular.ttf",textHeight);
 		textFont(font);
 		
 		initScene();
@@ -213,7 +218,7 @@ public class TestPinata extends PApplet {
 	
 	public void twitterReader() { //PiniataCookie
 		//Bieber stress test!
-		String urlst = "http://search.twitter.com/search.json?q=Bieber";
+		String urlst = "http://search.twitter.com/search.json?q="+hashtag;
 		URL url;
 		StringBuffer buff = new StringBuffer(); 
 		try {
@@ -297,9 +302,9 @@ public class TestPinata extends PApplet {
 
 		int textsize = (int)textWidth(text)+10;
 		fill(255,255,255);
-		line(xAchse - 5, yAchse+3, x, y);
-		line(xAchse - 5 + textsize + 5, yAchse+3, x, y);
-		rect(xAchse - 5, yAchse - 12, textsize + 5, 15);
+		line(xAchse - 5, (yAchse - textHeight)+(textHeight + 5), x, y);
+		line(xAchse - 5 + textsize + 5, (yAchse - textHeight)+(textHeight + 5), x, y);
+		rect(xAchse - 5, yAchse - textHeight, textsize + 5, textHeight + 5);
 		fill(0);
 		text(text, xAchse, yAchse);
 		noFill();
@@ -467,17 +472,30 @@ public class TestPinata extends PApplet {
 						//Follow Texte
 						followText(ud.name, (int)pos.x, (int)pos.y, (int)getPerX(70), (int)getPerY(100));
 						
+						//Format user Text
+						fill(128);
+						String userText = "";
+						if(ud.text.length()-1 > 24) {
+							userText += ud.text.substring(0, 25)+"\n";
+							if(ud.text.length()-1 > 48) {
+								userText += ud.text.substring(25, 48);
+							} else userText += ud.text.substring(25, ud.text.length()-1);
+						}
+							
 						if(playerScores.get(ud.name) != null) {
 							//Twitter Nachrichten
-							text(ud.name + "("+playerScores.get(ud.name)+"): " + ud.text, 605, (int)pos.y);
+							text(ud.name + " ~~ Punkte: ("+playerScores.get(ud.name)+"):\n " + userText, getPerX(71), (int)pos.y);
 						} else {
 							//Twitter Nachrichten
-							text(ud.name + "(0): " + ud.text, 605, (int)pos.y);
+							text(ud.name + " ~~ Punkte: (0):\n " + userText, getPerX(71), (int)pos.y);
 						}
 					}
 				}
 			}
 		}
+		
+		//Nur für Demo Zwecke
+		hashTagEditMode();
 	}
 
 	private void crosshair() {
@@ -492,7 +510,9 @@ public class TestPinata extends PApplet {
 	private void createRandomFromTweet(String name, String text, int x, int y) {
 		UserData ud = new UserData();
 		ud.name = name;
-		ud.text = text;
+		//Textfilter
+		ud.text = text.replace("\n","")
+						.replace(" fuck ", "****");
 		ud.image = (int) (Math.random() * 3)+1;
 
 		physics.setDensity(1.0f);
@@ -632,43 +652,76 @@ public class TestPinata extends PApplet {
 					objPos.y > tarPos.y && objPos.y < tarPos.y + tarSize.y); 
 	}
 	
+	
+	private boolean hashTagEditMode = false;
+	private void hashTagEditMode() {
+		if(hashTagEditMode) {
+			fill(255,0,0);
+			rect(getPerX(70),getPerY(0),getPerX(30),getPerY(5));
+			fill(0);
+			stroke(0);
+			text("Suchfilter:"+hashtag,getPerX(71),getPerY(3));
+		}else{
+			fill(0);
+			stroke(0);
+			text("Suchfilter ändern mit \"h\"\nSuchfilter: "+hashtag,getPerX(71),getPerY(4));
+		}
+	}
+	
 	public void keyPressed() {
-
-		Vec2 gravity = world.getGravity();
-
-		switch (keyCode) {
-		default:
-			System.out
-					.println("Ich habe keine Ahnung welche Taste gedrückt wurde :D"
-							+ keyCode);
-			break;
-		case RECHTS:
-			world.setGravity(new Vec2(gravity.x + 10, gravity.y));
-			break;
-		case LINKS:
-			world.setGravity(new Vec2(gravity.x - 10, gravity.y));
-			break;
-		case HOCH:
-			world.setGravity(new Vec2(gravity.x, gravity.y + 10));
-			break;
-		case RUNTER:
-			world.setGravity(new Vec2(gravity.x, gravity.y - 10));
-			break;
-		case A_TASTE:
-			crosshairX -= 5;
-			break;
-		case D_TASTE:
-			crosshairX += 5;
-			break;
-		case LEERTASTE:
-			createRandom(crosshairX, crosshairY);
-			break;
-		case 18:
-			physics.setDensity(1.0f);
-			physics.setFriction(1.0f);
-			physics.setRestitution(0.7f);
-			physics.createCircle(205, 150, 15);
-			break;
+		if(hashTagEditMode) {
+			//Nur für Demo zwecke
+			if(keyCode == 10) {
+				hashTagEditMode = !hashTagEditMode;
+				tweets.clear();
+			}else{
+				if(keyCode >= 65 && keyCode <= 90) {
+					hashtag += key;
+				}else if(keyCode == 8){
+					if(hashtag.length() > 0) 
+						hashtag = hashtag.substring(0, hashtag.length()-1);
+				}
+			}
+		}else{
+			//Nur für Demo zwecke
+			if(key == 'h') hashTagEditMode = !hashTagEditMode;
+			
+			Vec2 gravity = world.getGravity();
+	
+			switch (keyCode) {
+			default:
+				System.out
+						.println("Ich habe keine Ahnung welche Taste gedrückt wurde :D"
+								+ keyCode);
+				break;
+			case RECHTS:
+				world.setGravity(new Vec2(gravity.x + 10, gravity.y));
+				break;
+			case LINKS:
+				world.setGravity(new Vec2(gravity.x - 10, gravity.y));
+				break;
+			case HOCH:
+				world.setGravity(new Vec2(gravity.x, gravity.y + 10));
+				break;
+			case RUNTER:
+				world.setGravity(new Vec2(gravity.x, gravity.y - 10));
+				break;
+			case A_TASTE:
+				crosshairX -= 5;
+				break;
+			case D_TASTE:
+				crosshairX += 5;
+				break;
+			case LEERTASTE:
+				createRandom(crosshairX, crosshairY);
+				break;
+			case 18:
+				physics.setDensity(1.0f);
+				physics.setFriction(1.0f);
+				physics.setRestitution(0.7f);
+				physics.createCircle(205, 150, 15);
+				break;
+			}
 		}
 	}
 
