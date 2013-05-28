@@ -6,8 +6,13 @@
  * 
  * @changelog:
  * 		(noch nicht im Blog) 23.05.2013:
- * 			-Twitter Reader wird nun innerhalb eines Threads ausgeführt
- * 			-Bug mit Gravity nach Zero Gravtiy gefixed
+ * 			- Twitter Reader wird nun innerhalb eines Threads ausgeführt
+ * 			- Bug mit Gravity nach Zero Gravtiy gefixed (Antistuck)
+ * 			- Skalierbarkeit
+ * 			- Highscore
+ * 			- Leichtere Fehlerbehebung mit "Offline Modus"
+ * 			- Weitere Animationen für Highscore hinzugefügt
+ * 			- Änderbarer Suchfilter
  */
 
 import java.awt.Font;
@@ -36,19 +41,34 @@ import processing.core.PImage;
 
 public class TestPinata extends PApplet {
 
+	/**
+	 * Die Klasse UserData ist dafür da, jedem Monster Werte mit 
+	 * zu geben, wie z.B. das Bild aussieht.
+	 */
 	class UserData {
-		public int image;
-		public String text = "Lorem Ipsum";
-		public String name = "Random Guest";
+		public int image;						//Als Int Welches Monster es ist
+		public String text = "Lorem Ipsum";		//Twitter Nachricht, Default: Lorem Ipsum
+		public String name = "Random Guest";	//Twitter Name, Default: Random Guest
 		
-		public UserData() {
+		public UserData() {						//Konstrucktor
 		};
 	}
 	
+	/**
+	 * Die Klasse Highscore verwaltet die x besten Twitterer.
+	 */
 	class Highscore {
-		LinkedList<Integer> points = new LinkedList<>();
-		LinkedList<String> name = new LinkedList<>();
+		LinkedList<Integer> points = new LinkedList<>();	//max 10 besten Punkte
+		LinkedList<String> name = new LinkedList<>();		//max 10 besten Namen
 		
+		/**
+		 * addPlayer versucht einen neuen Spieler dem Highscore hinzu-
+		 * zufügen indem es kontrolliert ob er genug Punkte hat um in
+		 * der Liste aufgeführt zu werden.
+		 * 
+		 * @param name Der Name des Spielers
+		 * @param points Die Punkte des Spielers
+		 */
 		public void addPlayer(String name, int points) {
 			if(this.points.size() <= 0) {
 				this.points.add(points);
@@ -82,20 +102,65 @@ public class TestPinata extends PApplet {
 			}
 		}
 		
+		/**
+		 * Getter für die Punkte Liste
+		 * 
+		 * @return Eine Liste mit den Punkten
+		 */
 		public LinkedList<Integer> getPoints() {
 			return points;
 		}
 		
+		/**
+		 * Getter für die Namens Liste
+		 * 
+		 * @return Eine Liste mit den Namen
+		 */
 		public LinkedList<String> getName() {
 			return name;
 		}
-		
 	}
 
-	private final static int BLAUES_MONSTER1 = 1;
+	/**
+	 * Der MonsterTweetReader sorgt dafür das die Tweets dauernd im Hintergrund
+	 * aktualisiert werden.
+	 */
+	class MonsterTweetReader extends Thread{
+		public void run() {
+			try {
+				while(true) {
+					try {
+						TestPinata.this.twitterReader();
+					}catch(Exception e ) {}
+					Thread.sleep(5000);
+				}
+			}catch(Exception e) {}
+		}
+	}
+	
+	/**
+	 * Die Klasse Tweet hält Informationen über eine Twitter Nachricht
+	 */
+	class Tweet {
+		public String name;
+		public String text;
+		public void Tweet(String n, String t) {name = n; text = t;}
+		public String toString() {
+			return name;
+		}
+	}
+	
+	//Zählvariablen für Tweets
+	private long lastTweet = 0;
+	private LinkedList<Tweet> tweets;
+	private boolean firstRun = true;
+	
+	//ID's der verschiedenen Bilder in der UserData Klasse
+	private final static int BLAUES_MONSTER1 = 1;		
 	private final static int PINKES_MONSTER1 = 2;
 	private final static int ORANGES_MONSTER1 = 3;
 
+	//ID'S für bestimmte Tasten
 	private final static int LEERTASTE = 32;
 	private final static int LINKS = 37;
 	private final static int HOCH = 38;
@@ -104,44 +169,61 @@ public class TestPinata extends PApplet {
 	private final static int A_TASTE = 65;
 	private final static int D_TASTE = 68;
 
-	private Physics physics;
-	private World world;
+	private Physics physics;	//Physik der Simulation
+	private World world;		//Genaueres Physikabbild der Simulation
 	
-	private int crosshairX = 300;
-	private int crosshairY = 35;
+	private int crosshairX = 300;	//Pfadenkreuz X Koordinaten
+	private int crosshairY = 35;	//Pfadenkreuz Y Koordinaten
+	
+	private PImage img, img2, img3;		//Bilder für die Monster
+	private int time, throwtime;		//Zeiten für Zeitsteuerung (Highscore und Tweets)
 
-	private int points = 0;
+	private HashMap<String, Integer> playerScores;	//Alle Spieler Punkte
 	
-	private PImage img, img2, img3;
-	private int time, throwtime;
-
-	private HashMap<String, Integer> playerScores;
+	//Die Highscore
+	private Highscore highscore;	//Highscore der besten X Spieler
 	
-	private Highscore highscore;
+	//Die Standardschriftart
+	private PFont font;				//Standardschriftart der Applikation
 	
-	private PFont font;
+	//Eigenschaften für die Fenstergröße
+	public static final int SCREEN_W = 800;//1920;	//Auflösung breite
+	public static final int SCREEN_H = 480;//1080;	//Auflösung höhe
 	
-	public static final int SCREEN_W = 800;//1920;
-	public static final int SCREEN_H = 480;//1080;
+	private String hashtag;		//Der Hashtag nachdem geschaut werden soll
+	private int textHeight;	//Die Texthöhe
 	
-	private String hashtag;
-	private int textHeight;
+	//Für die Grafische Highsoreanzeige
+	private boolean highscoreSwitch = false;	//Der wechsel ausfahren/einfahren
+	private int highscoreX = 0;				//Die x Koordination von highscore
+	private int highscoreY = 0;				//Die y Koordinaten von highscore
+	private int highscoreswitchTime = 25000;	//Default Switch Time
+	private int switchOut = 5000;				//Zeit zum ausblenden
+	private int switchIn = 25000;				//Zeit zum anzeigen
 	
+	/**
+	 * Die Methode die alles einrichtet :P
+	 */
 	public void setup() {
-		//size(320,160);
-		//size(800,480);
-		//size(800,800);	//Quadratisch Praktisch Gut :D
+		//Setzte die größe des Fensters
 		size(TestPinata.SCREEN_W, TestPinata.SCREEN_H);
+		//Setzte die Zeichengeschwindigkeit auf 60 Bilder
 		frameRate(60);
+		//Setzte das AA auf 8x
 		smooth(8);
 
+		//Initalisiere Listen und Maps
 		tweets = new LinkedList<>();
 		playerScores = new HashMap<>();
 		highscore = new Highscore();
-		hashtag = "HAW_Hamburg";
 		
+		//Setzte den Default Hashtag
+		hashtag = "Hamburg";
+		
+		//Setzte Zeitvariablen für den Highscore
 		time = throwtime = millis();
 		
+		//Lade die vielen kleinen Monster :D
 		img = loadImage("blaues_monster1.png");
 		img.resize(width/32,width/32);//32, 32);
 
@@ -151,31 +233,48 @@ public class TestPinata extends PApplet {
 		img3 = loadImage("oranges_monster1.png");
 		img3.resize(width/32,width/32);
 		
-		//Font
+		//Font erstellen und Texthöhe bestellen
 		textHeight = width/64;
 		font = createFont("Audiowide-Regular.ttf",textHeight);
 		textFont(font);
 		
-		initScene();
-
-		// physics.setDensity(1.0f);
-		// body = physics.createRect(175, 100, 200, 50);
+		//highscore default
+		highscoreX = (int)getPerX(101);
 		
+		//Erstelle die Physik und die "Welt"
+		initScene();
+		
+		//Lese am Start einmal die Twitter Nachrichten
 		twitterReader();
 		
+		//Fülle die Welt mit Inhalt
 		createWorld();
+		
+		//Erstelle den Twitter Reader Thread
 		MonsterTweetReader mtr = new MonsterTweetReader();
-		mtr.start();
+		mtr.start();	//Starte den Thread
 	}
 	
+	/**
+	 * Die main benutzten wir um:
+	 * 1. Die Anwendung in einer Art Vollbildmodus zu starten
+	 * 2. Eine runable .jar erzeugen
+	 * 
+	 * @param args Parameter werden nicht benutzt
+	 */
 	public static void main(String[] args) {
-		Frame frame = new Frame("Regenbogencookies");
+		Frame frame = new Frame("Regenbogencookies");	//Name des Fensters
+		
+		//Obere Leiste ein/ausschalten (Vollbild annähernd)
 		frame.setUndecorated(true);
-		// The name "sketch_name" must match the name of your program
+		
+		//Binde die Applet ein
 		PApplet applet = new TestPinata(   );
 		frame.add(applet);
 		applet.init(   );
 		frame.setBounds(0, 0, TestPinata.SCREEN_W, TestPinata.SCREEN_H); 
+		
+		//Mache alles Sichtabr
 		frame.setVisible(true);
 	}
 	
@@ -192,30 +291,12 @@ public class TestPinata extends PApplet {
 	public float getPerY(float percent) {
 		return height/100f*percent;
 	}
-
-	class MonsterTweetReader extends Thread{
-		public void run() {
-			try {
-				while(true) {
-					TestPinata.this.twitterReader();
-					Thread.sleep(5000);
-				}
-			}catch(Exception e) {}
-		}
-	}
 	
-	class Tweet {
-		public String name;
-		public String text;
-		public void Tweet(String n, String t) {name = n; text = t;}
-		public String toString() {
-			return name;
-		}
-	}
-	private long lastTweet = 0;
-	private LinkedList<Tweet> tweets;
-	private boolean firstRun = true;
-	
+	/**
+	 * Die Methode twitterReader wird vom Thread verwendet und ganz am Anfang
+	 * in der Setup einmal um die Twitternachrichten sortiert nach dem Hashtag
+	 * auszulesen.
+	 */
 	public void twitterReader() { //PiniataCookie
 		//Bieber stress test!
 		String urlst = "http://search.twitter.com/search.json?q="+hashtag;
@@ -251,13 +332,26 @@ public class TestPinata extends PApplet {
 		    } 
 	        firstRun = false;
 		} catch (Exception e) {
-			e.printStackTrace();
+			//e.printStackTrace();
 		}  
 	}
 	
-	private float minG = 0.5f;
-	private float maxG = 0.95f;
-	private float abstand = 6.5f;
+	//Variablen zum Kontrollieren der Eigenschaften des Welteninhalts
+	private float minG = 0.5f;		//Minimaler Rückstoß der Bumper
+	private float maxG = 0.95f;	//Maximaler Rückstoß der Bumper	
+	private float abstand = 6.5f;	//Abstand der Bumper
+	/**
+	 * Erstellt den Inhalt der Welt (Bumper und Textarea)
+	 *      ____________
+	 *      | o o o|~~~|
+	 *      |o o o |~~~|
+	 *      | o o o|~~~|
+	 *      |______|___|
+	 *	
+	 *      ~~~~~~~~  
+	 *      70%	    ~~~
+	 *			    30%
+	 */
 	public void createWorld() {
 		 physics.setDensity(0.0f);
 		 physics.createRect(getPerX(70), getPerY(0), getPerX(100), getPerY(100));
@@ -282,17 +376,27 @@ public class TestPinata extends PApplet {
 			 }
 		 }
 	}
+	
+	/**
+	 * Erstellt eine Scene mit Physik und setzt den neuen Renderer
+	 */
 	public void initScene() {
 		physics = new Physics(this, width, height);
-//		physics = new Physics(this, width, height, 0.0f, -9.81f, width, height, width, height-100, 1.0f);
-//		physics.createHollowBox(250, 250, 50, 50, 5);
 		world = physics.getWorld();
 	
-		// physics = new Physics(this, width, height, 0.0f, -9.81f, width,
-		// height, width, height-100, 1.0f);
 		physics.setCustomRenderingMethod(this, "myCustomRenderer");
 	}
 
+	/**
+	 * Erstellt einem Text der den Bildschirm nicht verlassen kann und auf die
+	 * koordinaten x,y zeigt.
+	 * 
+	 * @param text der anzuzeigen Text
+	 * @param x die x koordinate auf die gezeigt werden soll
+	 * @param y die y koordinate auf die gezeigt werden soll
+	 * @param width die Breite die der Text nicht verlassen darf
+	 * @param height die Höhe die der Text nicht verlassen darf
+	 */
 	public void followText(String text, int x, int y, int width, int height) {
 		// Ermitteln welche Rand am weitesten entfernt ist
 		int abstand = 50;
@@ -310,19 +414,52 @@ public class TestPinata extends PApplet {
 		noFill();
 	}
 	
+	/**
+	 * Blendet die Highscore ein
+	 */
+	private void showHighscore() {
+		if(highscoreX > getPerX(70)) highscoreX -= (int)getPerX(1f);
+	}
+	
+	/**
+	 * Blendet die Highscore aus
+	 */
+	private void hideHighscore() {
+		if(highscoreX < getPerX(100)) highscoreX += (int)getPerX(1f);
+	}
+	
+	/**
+	 * Der Custom Renderer der anstelle der draw Methode verwendet wird
+	 * 
+	 * @param world eine genauere physikalischen angabe der Scene
+	 */
 	public void myCustomRenderer(World world) {
 
 		// clear the background
 		background(255);//0x666666)
 
-		if( ((time+10000)-millis()) <= 500) {
-			System.out.println("--- Highscore ---");
-			LinkedList<String> names = this.highscore.getName();
-			LinkedList<Integer> points = this.highscore.getPoints();
-			
-			for(int i = 0; i < names.size(); i++) {
-				System.out.println((i+1) + ". Platz: " + names.get(i) + " mit " + points.get(i) + " Punkten");
+		//Move in the highscore
+		if(highscoreSwitch) {
+			showHighscore();
+		} else {
+			hideHighscore();
+		}
+		
+		if( ((time+highscoreswitchTime)-millis()) <= 500) {
+			if(highscoreSwitch) {
+				highscoreswitchTime = switchIn;
+			}else {
+				highscoreswitchTime = switchOut;
 			}
+			highscoreSwitch = !highscoreSwitch;
+			
+			//System.out.println("--- Highscore ---");
+			//LinkedList<String> names = this.highscore.getName();
+			//LinkedList<Integer> points = this.highscore.getPoints();
+			
+			//for(int i = 0; i < names.size(); i++) {
+			//	System.out.println((i+1) + ". Platz: " + names.get(i) + " mit " + points.get(i) + " Punkten");
+			//}
 			time = millis();
 		}
 		
@@ -331,7 +468,7 @@ public class TestPinata extends PApplet {
 //				println(Arrays.toString(this.tweets.toArray()));
 				Tweet t = this.tweets.getFirst();
 				this.tweets.removeFirst();
-				createRandomFromTweet(t.name, t.text, (int)random(25f, 400f), 50);
+				createRandomFromTweet(t.name, t.text, (int)random(getPerX(5), getPerX(65)), 50);
 			}
 			
 			throwtime = millis();
@@ -480,6 +617,8 @@ public class TestPinata extends PApplet {
 							if(ud.text.length()-1 > 48) {
 								userText += ud.text.substring(25, 48);
 							} else userText += ud.text.substring(25, ud.text.length()-1);
+						}else{
+							userText += ud.text.substring(0, ud.text.length()-1)+"\n";
 						}
 							
 						if(playerScores.get(ud.name) != null) {
@@ -496,8 +635,25 @@ public class TestPinata extends PApplet {
 		
 		//Nur für Demo Zwecke
 		hashTagEditMode();
+		
+		//Highscore
+		fill(255);
+		rect(highscoreX,getPerY(0),getPerX(30),getPerY(100));
+		fill(0);
+		text("Highscore",highscoreX+5,getPerY(5));		
+		try {
+			LinkedList<String> names = this.highscore.getName();
+			LinkedList<Integer> points = this.highscore.getPoints();
+			
+			for(int i = 0; i < names.size(); i++) {
+				text((i+1) + ". " + names.get(i) + " mit " + points.get(i) + " P.",highscoreX+5,getPerY((i*5)+10));
+			}
+		}catch(Exception e) {}
 	}
 
+	/**
+	 * Zeichnet ein Pfadenkreuz, nur für Testzwecke
+	 */
 	private void crosshair() {
 		noFill();
 		rect(crosshairX-5,crosshairY-5,10,10);
@@ -507,6 +663,15 @@ public class TestPinata extends PApplet {
 		line(crosshairX,crosshairY,crosshairX-30,crosshairY);
 	}
 	
+	/**
+	 * Erzeugt ein Zufälliges Monster dem Tweet Eigenschaften mitgegeben 
+	 * werden.
+	 * 
+	 * @param name Twittername der Nachricht
+	 * @param text Twittertext der Nachricht
+	 * @param x position wo das Objekt erzeugt werden soll
+	 * @param y position wo das Objekt erzeugt werden soll
+	 */
 	private void createRandomFromTweet(String name, String text, int x, int y) {
 		UserData ud = new UserData();
 		ud.name = name;
@@ -606,7 +771,7 @@ public class TestPinata extends PApplet {
 		boolean hasScored = false;
 		if(collision(pos, p100p, p100s)) {
 			world.destroyBody(body);
-			points += 100;
+			//points += 100;
 			hasScored = true;
 			if(playerScores.get(ud.name) != null) {
 				playerScores.put(ud.name, playerScores.get(ud.name) + 100);
@@ -615,7 +780,7 @@ public class TestPinata extends PApplet {
 			}
 		}else if(collision(pos, p50p1, p50s1) || collision(pos, p50p2, p50s2)) {
 			world.destroyBody(body);
-			points += 50;
+			//points += 50;
 			hasScored = true;
 			if(playerScores.get(ud.name) != null) {
 				playerScores.put(ud.name, playerScores.get(ud.name) + 50);
@@ -624,7 +789,7 @@ public class TestPinata extends PApplet {
 			}
 		}else if(collision(pos, p25p1, p25s1) || collision(pos, p25p2, p25s2)) {
 			world.destroyBody(body);
-			points += 25;
+			//points += 25;
 			hasScored = true;
 			if(playerScores.get(ud.name) != null) {
 				playerScores.put(ud.name, playerScores.get(ud.name) + 25);
@@ -633,7 +798,7 @@ public class TestPinata extends PApplet {
 			}
 		}else if(collision(pos, p0p1, p0s1) || collision(pos, p0p2, p0s2)) {
 			world.destroyBody(body);
-			points += 0;
+			//points += 0;
 			hasScored = true;
 			if(playerScores.get(ud.name) != null) {
 				playerScores.put(ud.name, playerScores.get(ud.name) + 0);
@@ -643,7 +808,19 @@ public class TestPinata extends PApplet {
 		}
 		
 		if(hasScored) {
-			this.highscore.addPlayer(ud.name, playerScores.get(ud.name));
+			//Dieses try wird komischerweise nur im Offline Modus ausgelöst
+			//Zur sicherheit falls das Internet einmal instabil ist, habe 
+			//ich diesen kleinen Hack eingebaut der alles richtet... warum
+			//es klappt keine Ahnung -.-
+			try{
+				this.highscore.addPlayer(ud.name, playerScores.get(ud.name));
+			}catch(Exception e) {
+				try {
+					this.highscore.addPlayer(ud.name, playerScores.get(ud.name));
+				}catch(Exception ex) {
+					System.err.println("Böser Hack! Fehler beim Schreiben des Highscores!");	
+				}
+			}
 		}
 	}
 	
