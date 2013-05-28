@@ -1,12 +1,25 @@
+/*
+ * @name: TestPinata
+ * @author: Carola Christoffel & Joschka Schulz
+ * @description:
+ * 		Unser kleines Spiel für das Reperbahnfestival.
+ * 
+ * @changelog:
+ * 		(noch nicht im Blog) 23.05.2013:
+ * 			-Twitter Reader wird nun innerhalb eines Threads ausgeführt
+ * 			-Bug mit Gravity nach Zero Gravtiy gefixed
+ */
+
+import java.awt.Font;
 import java.awt.Frame;
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
 import java.net.URL;
-import java.security.KeyStore.Entry;
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.LinkedList;
+import java.util.Map.Entry;
 
 import org.jbox2d.collision.CircleShape;
 import org.jbox2d.collision.PolygonShape;
@@ -18,6 +31,7 @@ import org.jbox2d.p5.Physics;
 import org.json.*;
 
 import processing.core.PApplet;
+import processing.core.PFont;
 import processing.core.PImage;
 
 public class TestPinata extends PApplet {
@@ -29,6 +43,53 @@ public class TestPinata extends PApplet {
 		
 		public UserData() {
 		};
+	}
+	
+	class Highscore {
+		LinkedList<Integer> points = new LinkedList<>();
+		LinkedList<String> name = new LinkedList<>();
+		
+		public void addPlayer(String name, int points) {
+			if(this.points.size() <= 0) {
+				this.points.add(points);
+				this.name.add(name);
+			}else {
+				if(this.name.contains(name)) {
+					int index = this.name.indexOf(name);
+					this.points.remove(index);
+					this.name.remove(index);
+				}
+				
+				boolean check = false;
+				for(int i = 0; i < constrain(this.points.size(), 1, 10); i++) {
+					if(points > this.points.get(i)) {
+						this.points.add(i, points);
+						this.name.add(i,name);
+						check = true;
+						
+						if(this.points.size() > 10) {
+							this.points.removeLast();
+							this.name.removeLast();
+						}
+						break;
+					}
+				}
+				
+				if(!check && this.points.size() < 10) {
+					this.points.addLast(points);
+					this.name.addLast(name);
+				}
+			}
+		}
+		
+		public LinkedList<Integer> getPoints() {
+			return points;
+		}
+		
+		public LinkedList<String> getName() {
+			return name;
+		}
+		
 	}
 
 	private final static int BLAUES_MONSTER1 = 1;
@@ -54,37 +115,90 @@ public class TestPinata extends PApplet {
 	private PImage img, img2, img3;
 	private int time, throwtime;
 
-	private HashMap<String, Integer> highscore;
+	private HashMap<String, Integer> playerScores;
+	
+	private Highscore highscore;
+	
+	private PFont font;
+	
+	public static final int SCREEN_W = 1920;
+	public static final int SCREEN_H = 1080;
 	
 	public void setup() {
-		size(800, 480);
+		//size(320,160);
+		//size(800,480);
+		//size(800,800);	//Quadratisch Praktisch Gut :D
+		size(TestPinata.SCREEN_W, TestPinata.SCREEN_H);
 		frameRate(60);
-		smooth();
+		smooth(8);
 
 		tweets = new LinkedList<>();
-		highscore = new HashMap<>();
+		playerScores = new HashMap<>();
+		highscore = new Highscore();
 		
 		time = throwtime = millis();
 		
 		img = loadImage("blaues_monster1.png");
-		img.resize(32, 32);
+		img.resize(width/32,width/32);//32, 32);
 
 		img2 = loadImage("pinkes_monster1.png");
-		img2.resize(32, 32);
+		img2.resize(width/32,width/32);
 		
 		img3 = loadImage("oranges_monster1.png");
-		img3.resize(32, 32);
+		img3.resize(width/32,width/32);
+		
+		//Font
+		font = createFont("Audiowide-Regular.ttf",width/64);
+		textFont(font);
 		
 		initScene();
 
 		// physics.setDensity(1.0f);
 		// body = physics.createRect(175, 100, 200, 50);
 		
-		createWorld();
-		
 		twitterReader();
+		
+		createWorld();
+		MonsterTweetReader mtr = new MonsterTweetReader();
+		mtr.start();
+	}
+	
+	public static void main(String[] args) {
+		Frame frame = new Frame("Regenbogencookies");
+		frame.setUndecorated(true);
+		// The name "sketch_name" must match the name of your program
+		PApplet applet = new TestPinata(   );
+		frame.add(applet);
+		applet.init(   );
+		frame.setBounds(0, 0, TestPinata.SCREEN_W, TestPinata.SCREEN_H); 
+		frame.setVisible(true);
+	}
+	
+	/*
+	 * Gibt einen Bereich des Displays zurück zwischen 0% - 100%
+	 */
+	public float getPerX(float percent) {
+		return width/100f*percent;
+	}
+	
+	/*
+	 * Gibt einen Bereich des Displays zurück zwischen 0% - 100%
+	 */
+	public float getPerY(float percent) {
+		return height/100f*percent;
 	}
 
+	class MonsterTweetReader extends Thread{
+		public void run() {
+			try {
+				while(true) {
+					TestPinata.this.twitterReader();
+					Thread.sleep(5000);
+				}
+			}catch(Exception e) {}
+		}
+	}
+	
 	class Tweet {
 		public String name;
 		public String text;
@@ -136,26 +250,35 @@ public class TestPinata extends PApplet {
 		}  
 	}
 	
+	private float minG = 0.5f;
+	private float maxG = 0.95f;
+	private float abstand = 6.5f;
 	public void createWorld() {
 		 physics.setDensity(0.0f);
-		 for(int i = 0; i < 13; i++) {
+		 physics.createRect(getPerX(70), getPerY(0), getPerX(100), getPerY(100));
+		 System.out.println("x:"+getPerX(60));
+		 for(int i = 0; i < 10; i++) {
 			 if(i*50 < 550) {
-				 physics.setRestitution(random(0.5f,0.95f));
-				 physics.createCircle(50+(i*50), 125, 5);
+				 physics.setRestitution(random(minG,maxG));
+				 physics.createCircle(getPerX(abstand)+getPerX(i*abstand),getPerY(30), width/120);//50+(i*50), 125, 5);
 				 
-				 physics.setRestitution(random(0.5f,0.95f));
-				 physics.createCircle(25+(i*50), 200, 5);
+				 if(i > 0){
+					 physics.setRestitution(random(minG,maxG));
+					 physics.createCircle(getPerX(abstand/2)+getPerX(i*abstand),getPerY(45), width/120);//25+(i*50), 200, 5);
+				 }
 				 
-				 physics.setRestitution(random(0.5f,0.95f));
-				 physics.createCircle(50+(i*50), 275, 5);
+				 physics.setRestitution(random(minG,maxG));
+				 physics.createCircle(getPerX(abstand)+getPerX(i*abstand),getPerY(60), width/120);//50+(i*50), 275, 5);
 				 
-				 physics.setRestitution(random(0.5f,0.95f));
-				 physics.createCircle(25+(i*50), 350, 5);
+				 if(i > 0){		
+					 physics.setRestitution(random(minG,maxG));
+					 physics.createCircle(getPerX(abstand/2)+getPerX(i*abstand),getPerY(75), width/120);//25+(i*50), 350, 5);
+				 }
 			 }
 		 }
 	}
 	public void initScene() {
-		physics = new Physics(this, width-200, height);
+		physics = new Physics(this, width, height);
 //		physics = new Physics(this, width, height, 0.0f, -9.81f, width, height, width, height-100, 1.0f);
 //		physics.createHollowBox(250, 250, 50, 50, 5);
 		world = physics.getWorld();
@@ -169,8 +292,8 @@ public class TestPinata extends PApplet {
 		// Ermitteln welche Rand am weitesten entfernt ist
 		int abstand = 50;
 
-		int xAchse = constrain(x - abstand, abstand, width - 50);
-		int yAchse = constrain(y - abstand, abstand, height - 50);
+		int xAchse = constrain(x - abstand, abstand, width - (int)getPerX(5));
+		int yAchse = constrain(y - abstand, abstand, height - (int)getPerY(5));
 
 		int textsize = (int)textWidth(text)+10;
 		fill(255,255,255);
@@ -182,30 +305,25 @@ public class TestPinata extends PApplet {
 		noFill();
 	}
 	
-	public void showHighscore() {
-		
-//		for(Entry entry : highscore.entrySet()) {
-//			
-//		}
-//		
-//		text("1. Platz: "+points, 605, 430);
-//		text("2. Platz: "+points, 605, 440);
-//		text("3. Platz: "+points, 605, 450);
-	}
-	
 	public void myCustomRenderer(World world) {
 
 		// clear the background
 		background(255);//0x666666)
 
 		if( ((time+10000)-millis()) <= 500) {
-			twitterReader();			
+			System.out.println("--- Highscore ---");
+			LinkedList<String> names = this.highscore.getName();
+			LinkedList<Integer> points = this.highscore.getPoints();
+			
+			for(int i = 0; i < names.size(); i++) {
+				System.out.println((i+1) + ". Platz: " + names.get(i) + " mit " + points.get(i) + " Punkten");
+			}
 			time = millis();
 		}
 		
 		if( ((throwtime+6000)-millis()) <= 500) {
 			if(this.tweets.size() > 0) {
-				println(Arrays.toString(this.tweets.toArray()));
+//				println(Arrays.toString(this.tweets.toArray()));
 				Tweet t = this.tweets.getFirst();
 				this.tweets.removeFirst();
 				createRandomFromTweet(t.name, t.text, (int)random(25f, 400f), 50);
@@ -214,9 +332,8 @@ public class TestPinata extends PApplet {
 			throwtime = millis();
 		}
 		
-		crosshair();
+//		crosshair();
 		drawPoints();
-		showHighscore();
 		
 		// Show the gravity
 		stroke(255, 128, 0);
@@ -344,12 +461,15 @@ public class TestPinata extends PApplet {
 					float radius = physics.worldToScreen(circle.getRadius());
 					
 					if(ud != null) {
-						//Follow Texte
-						followText(ud.name, (int)pos.x, (int)pos.y, 640, 480);
+						//Anti Stuck?
+						body.applyForce(new Vec2(random(-1, 1),0), new Vec2(0,0));
 						
-						if(highscore.get(ud.name) != null) {
+						//Follow Texte
+						followText(ud.name, (int)pos.x, (int)pos.y, (int)getPerX(70), (int)getPerY(100));
+						
+						if(playerScores.get(ud.name) != null) {
 							//Twitter Nachrichten
-							text(ud.name + "("+highscore.get(ud.name)+"): " + ud.text, 605, (int)pos.y);
+							text(ud.name + "("+playerScores.get(ud.name)+"): " + ud.text, 605, (int)pos.y);
 						} else {
 							//Twitter Nachrichten
 							text(ud.name + "(0): " + ud.text, 605, (int)pos.y);
@@ -378,7 +498,7 @@ public class TestPinata extends PApplet {
 		physics.setDensity(1.0f);
 		physics.setFriction(1.0f);
 		physics.setRestitution(0.7f);
-		physics.createCircle(x, y, 15).setUserData(ud);
+		physics.createCircle(x, y, width/64).setUserData(ud);
 	}
 	
 	private void createRandom(int x, int y) {
@@ -388,151 +508,122 @@ public class TestPinata extends PApplet {
 		physics.setDensity(1.0f);
 		physics.setFriction(1.0f);
 		physics.setRestitution(0.7f);
-		physics.createCircle(x, y, 15).setUserData(ud);
+		physics.createCircle(x, y, width/64).setUserData(ud);
 	}
 
 	private void drawPoints() {
 		//100 Punkte :D
 		fill(255, 0, 0);
-		rect(250, 400, 100, 80);
+		rect(getPerX(30),getPerY(90),getPerX(10),getPerY(10));//250, 400, 100, 80);
 		stroke(0);
 		fill(0);
-		text("100 Punkte",260,425);
+		text("100",getPerX(33.5f),getPerY(95));
 		
 		//50 Punkte :D
 		fill(255, 64, 0);
-		rect(150, 400, 100, 80);
+		rect(getPerX(20),getPerY(90),getPerX(10),getPerY(10));//150, 400, 100, 80);
 		stroke(0);
 		fill(0);
-		text("50 Punkte",160,425);
+		text("50",getPerX(24),getPerY(95));
 
 		fill(255, 64, 0);
-		rect(350, 400, 100, 80);
+		rect(getPerX(40),getPerY(90),getPerX(10),getPerY(10));//350, 400, 100, 80);
 		stroke(0);
 		fill(0);
-		text("50 Punkte",360,425);
+		text("50",getPerX(44),getPerY(95));
 		
 		//25 Punkte :D
 		fill(255, 128, 0);
-		rect(50, 400, 100, 80);
+		rect(getPerX(10),getPerY(90),getPerX(10),getPerY(10));//50, 400, 100, 80);
 		stroke(0);
 		fill(0);
-		text("25 Punkte",60,425);
+		text("25",getPerX(14),getPerY(95));
 		
 		fill(255, 128, 0);
-		rect(450, 400, 100, 80);
+		rect(getPerX(50),getPerY(90),getPerX(10),getPerY(10));//450, 400, 100, 80);
 		stroke(0);
 		fill(0);
-		text("25 Punkte",460,425);
+		text("25",getPerX(54),getPerY(95));
 		
 		//0 Punkte :D
 		fill(255, 255, 0);
-		rect(0, 400, 50, 80);
+		rect(getPerX(0),getPerY(90),getPerX(10),getPerY(10));//0, 400, 50, 80);
 		stroke(0);
 		fill(0);
-		text("Keine",10,425);
+		text("0",getPerX(4),getPerY(95));
 		
 		fill(255, 255, 0);
-		rect(550, 400, 50, 80);
+		rect(getPerX(60),getPerY(90),getPerX(10),getPerY(10));//550, 400, 50, 80);
 		stroke(0);
 		fill(0);
-		text("Keine",560,425);
+		text("0",getPerX(64),getPerY(95));
 	}
 	
 	public void checkPoints(World world, Vec2 pos, Body body, UserData ud) {
 		
 		//100 Punkte :D
-//		fill(255, 0, 0, 30);
-//		rect(250, 400, 100, 80);
-		Vec2 p100p = new Vec2(250,400);	// p[oints]100p[osition]
-		Vec2 p100s = new Vec2(100,80);	// p[oints]100s[ize]
-//		stroke(0);
-//		fill(0);
-//		text("100 Punkte",260,425);
+		Vec2 p100p = new Vec2(getPerX(30),getPerY(90));	// p[oints]100p[osition]
+		Vec2 p100s = new Vec2(getPerX(10),getPerY(10));	// p[oints]100s[ize]
+
+		Vec2 p50p1 = new Vec2(getPerX(20),getPerY(90));	// p[oints]50p[osition]1
+		Vec2 p50s1 = new Vec2(getPerX(10),getPerY(10));	// p[oints]50s[ize]1
+
+		Vec2 p50p2 = new Vec2(getPerX(40),getPerY(90));	// p[oints]50p[osition]1
+		Vec2 p50s2 = new Vec2(getPerX(10),getPerY(10));	// p[oints]50s[ize]1
+
+		Vec2 p25p1 = new Vec2(getPerX(10),getPerY(90));	// p[oints]25p[osition]1
+		Vec2 p25s1 = new Vec2(getPerX(10),getPerY(10));	// p[oints]25s[ize]1
+
+		Vec2 p25p2 = new Vec2(getPerX(50),getPerY(90));	// p[oints]25p[osition]1
+		Vec2 p25s2 = new Vec2(getPerX(10),getPerY(10));	// p[oints]25s[ize]1
+
+		Vec2 p0p1 = new Vec2(getPerX(0),getPerY(90));	// p[oints]0p[osition]1
+		Vec2 p0s1 = new Vec2(getPerX(10),getPerY(10));	// p[oints]0s[ize]1
+
+		Vec2 p0p2 = new Vec2(getPerX(60),getPerY(90));	// p[oints]0p[osition]1
+		Vec2 p0s2 = new Vec2(getPerX(10),getPerY(10));	// p[oints]0s[ize]1
 		
-		//50 Punkte :D
-//		fill(255, 64, 0, 30);
-//		rect(150, 400, 100, 80);
-		Vec2 p50p1 = new Vec2(150,400);	// p[oints]50p[osition]1
-		Vec2 p50s1 = new Vec2(100,80);	// p[oints]50s[ize]1
-//		stroke(0);
-//		fill(0);
-//		text("50 Punkte",160,425);
-//		
-//		fill(255, 64, 0, 30);
-//		rect(350, 400, 100, 80);
-		Vec2 p50p2 = new Vec2(350,400);	// p[oints]50p[osition]1
-		Vec2 p50s2 = new Vec2(100,80);	// p[oints]50s[ize]1
-//		stroke(0);
-//		fill(0);
-//		text("50 Punkte",360,425);
-		
-//		//25 Punkte :D
-//		fill(255, 128, 0, 30);
-//		rect(50, 400, 100, 80);
-		Vec2 p25p1 = new Vec2(50,400);	// p[oints]25p[osition]1
-		Vec2 p25s1 = new Vec2(100,80);	// p[oints]25s[ize]1
-//		stroke(0);
-//		fill(0);
-//		text("25 Punkte",60,425);
-//		
-//		fill(255, 128, 0, 30);
-//		rect(450, 400, 100, 80);
-		Vec2 p25p2 = new Vec2(450,400);	// p[oints]25p[osition]1
-		Vec2 p25s2 = new Vec2(100,80);	// p[oints]25s[ize]1
-//		stroke(0);
-//		fill(0);
-//		text("25 Punkte",460,425);
-		
-//		//0 Punkte :D
-//		fill(255, 255, 0, 30);
-//		rect(0, 400, 50, 80);
-		Vec2 p0p1 = new Vec2(0,400);	// p[oints]25p[osition]1
-		Vec2 p0s1 = new Vec2(50,80);	// p[oints]25s[ize]1
-//		stroke(0);
-//		fill(0);
-//		text("Keine",10,425);
-//		
-//		fill(255, 255, 0, 30);
-//		rect(550, 400, 50, 80);
-		Vec2 p0p2 = new Vec2(550,400);	// p[oints]25p[osition]1
-		Vec2 p0s2 = new Vec2(50,80);	// p[oints]25s[ize]1
-//		stroke(0);
-//		fill(0);
-//		text("Keine",560,425);		
-		
+		boolean hasScored = false;
 		if(collision(pos, p100p, p100s)) {
 			world.destroyBody(body);
 			points += 100;
-			if(highscore.get(ud.name) != null) {
-				highscore.put(ud.name, highscore.get(ud.name) + 100);
+			hasScored = true;
+			if(playerScores.get(ud.name) != null) {
+				playerScores.put(ud.name, playerScores.get(ud.name) + 100);
 			} else {
-				highscore.put(ud.name, 100);
+				playerScores.put(ud.name, 100);
 			}
 		}else if(collision(pos, p50p1, p50s1) || collision(pos, p50p2, p50s2)) {
 			world.destroyBody(body);
 			points += 50;
-			if(highscore.get(ud.name) != null) {
-				highscore.put(ud.name, highscore.get(ud.name) + 50);
+			hasScored = true;
+			if(playerScores.get(ud.name) != null) {
+				playerScores.put(ud.name, playerScores.get(ud.name) + 50);
 			} else {
-				highscore.put(ud.name, 50);
+				playerScores.put(ud.name, 50);
 			}
 		}else if(collision(pos, p25p1, p25s1) || collision(pos, p25p2, p25s2)) {
 			world.destroyBody(body);
 			points += 25;
-			if(highscore.get(ud.name) != null) {
-				highscore.put(ud.name, highscore.get(ud.name) + 25);
+			hasScored = true;
+			if(playerScores.get(ud.name) != null) {
+				playerScores.put(ud.name, playerScores.get(ud.name) + 25);
 			} else {
-				highscore.put(ud.name, 25);
+				playerScores.put(ud.name, 25);
 			}
 		}else if(collision(pos, p0p1, p0s1) || collision(pos, p0p2, p0s2)) {
 			world.destroyBody(body);
 			points += 0;
-			if(highscore.get(ud.name) != null) {
-				highscore.put(ud.name, highscore.get(ud.name) + 0);
+			hasScored = true;
+			if(playerScores.get(ud.name) != null) {
+				playerScores.put(ud.name, playerScores.get(ud.name) + 0);
 			} else {
-				highscore.put(ud.name, 0);
+				playerScores.put(ud.name, 0);
 			}
+		}
+		
+		if(hasScored) {
+			this.highscore.addPlayer(ud.name, playerScores.get(ud.name));
 		}
 	}
 	
