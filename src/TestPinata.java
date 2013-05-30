@@ -686,6 +686,12 @@ public class TestPinata extends PApplet {
 		physics.createCircle(x, y, width/64).setUserData(ud);
 	}
 	
+	/**
+	 * Erzeugt ein neues Zufälliges Monster ohne angehengte Daten
+	 * 
+	 * @param x	 die position an der das Monster in den Topf geworfen werden soll
+	 * @param y die position an der das Monster in den Topf geworfen werden soll
+	 */
 	private void createRandom(int x, int y) {
 		UserData ud = new UserData();
 		ud.image = (int) (Math.random() * 3)+1;
@@ -696,6 +702,9 @@ public class TestPinata extends PApplet {
 		physics.createCircle(x, y, width/64).setUserData(ud);
 	}
 
+	/**
+	 * Zeichnet die Behählter und die makierungen für die Punkte
+	 */
 	private void drawPoints() {
 		//100 Punkte :D
 		fill(255, 0, 0);
@@ -744,6 +753,15 @@ public class TestPinata extends PApplet {
 		text("0",getPerX(64),getPerY(95));
 	}
 	
+	/**
+	 * Überprüft per Kollisionsabfrage ob ein Monster in einem Behälter
+	 * der Punkte enthält gefallen ist.
+	 * 
+	 * @param world die world von Physiks damit das Monster entfernt werden kann.
+	 * @param pos die Position als Vec2 bom Behälter
+	 * @param body der Body vo Monster
+	 * @param ud die UserData vom Monster
+	 */
 	public void checkPoints(World world, Vec2 pos, Body body, UserData ud) {
 		
 		//100 Punkte :D
@@ -824,12 +842,22 @@ public class TestPinata extends PApplet {
 		}
 	}
 	
+	/**
+	 * Simple Kollisionskontrolle
+	 * 
+	 * @param objPos Objekt position als Vec2
+	 * @param tarPos Target position als Vec2
+	 * @param tarSize Target size als Vec2
+	 * @return true bei Kollision, false bei nicht Kollision
+	 */
 	public boolean collision(Vec2 objPos, Vec2 tarPos, Vec2 tarSize) {
 		return (objPos.x > tarPos.x && objPos.x < tarPos.x + tarSize.x &&
 					objPos.y > tarPos.y && objPos.y < tarPos.y + tarSize.y); 
 	}
 	
-	
+	/**
+	 * Einfache Methode zum debuggen. Mit ihr lässt sich der Hashtag ändern.
+	 */
 	private boolean hashTagEditMode = false;
 	private void hashTagEditMode() {
 		if(hashTagEditMode) {
@@ -845,6 +873,9 @@ public class TestPinata extends PApplet {
 		}
 	}
 	
+	/**
+	 * EventListener für den Tastendruck
+	 */
 	public void keyPressed() {
 		if(hashTagEditMode) {
 			//Nur für Demo zwecke
@@ -902,19 +933,21 @@ public class TestPinata extends PApplet {
 		}
 	}
 
+	/**
+	 * Processing draw() Methode, wird nicht mehr verwendet!
+	 */
 	public void draw() {
-		background(255f, 15f);
-
-		// Show the gravity
-		stroke(255, 0, 0);
-		Vec2 g = world.getGravity();
-		line(width / 2.0f, height / 2.0f, (width / 2.0f) + g.x, (height / 2.0f)
-				- g.y);
-		fill(255, 0, 0);
-		ellipse((width / 2.0f), (height / 2.0f), 4, 4);
-		
-		text("Gravity X:"+g.x+" Y:"+g.y, 605, 10);
-
+//		background(255f, 15f);
+//
+//		// Show the gravity
+//		stroke(255, 0, 0);
+//		Vec2 g = world.getGravity();
+//		line(width / 2.0f, height / 2.0f, (width / 2.0f) + g.x, (height / 2.0f)
+//				- g.y);
+//		fill(255, 0, 0);
+//		ellipse((width / 2.0f), (height / 2.0f), 4, 4);
+//		
+//		text("Gravity X:"+g.x+" Y:"+g.y, 605, 10);
+//
 	}
-
 }
