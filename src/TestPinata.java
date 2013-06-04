@@ -27,10 +27,12 @@ import java.util.LinkedList;
 import java.util.Map.Entry;
 
 import org.jbox2d.collision.CircleShape;
+import org.jbox2d.collision.FilterData;
 import org.jbox2d.collision.PolygonShape;
 import org.jbox2d.collision.ShapeType;
 import org.jbox2d.common.Vec2;
 import org.jbox2d.dynamics.Body;
+import org.jbox2d.dynamics.BodyDef;
 import org.jbox2d.dynamics.World;
 import org.jbox2d.p5.Physics;
 import org.json.*;
@@ -39,8 +41,7 @@ import processing.core.PApplet;
 import processing.core.PFont;
 import processing.core.PImage;
 
-public class TestPinata extends PApplet {
-
+public class TestPinata extends PApplet {	
 	/**
 	 * Die Klasse UserData ist dafür da, jedem Monster Werte mit 
 	 * zu geben, wie z.B. das Bild aussieht.
@@ -49,8 +50,9 @@ public class TestPinata extends PApplet {
 		public int image;						//Als Int Welches Monster es ist
 		public String text = "Lorem Ipsum";		//Twitter Nachricht, Default: Lorem Ipsum
 		public String name = "Random Guest";	//Twitter Name, Default: Random Guest
+		public short group = GRUPPE_WARTEND;
 		
-		public UserData() {						//Konstrucktor
+		public UserData() {						//Konstruktor
 		};
 	}
 	
@@ -169,6 +171,9 @@ public class TestPinata extends PApplet {
 	private final static int A_TASTE = 65;
 	private final static int D_TASTE = 68;
 
+	private final static int GRUPPE_WARTEND = 2;
+	private final static int GRUPPE_FALLEND = 3;
+	
 	private Physics physics;	//Physik der Simulation
 	private World world;		//Genaueres Physikabbild der Simulation
 	
@@ -200,7 +205,10 @@ public class TestPinata extends PApplet {
 	private int highscoreswitchTime = 25000;	//Default Switch Time
 	private int switchOut = 5000;				//Zeit zum ausblenden
 	private int switchIn = 25000;				//Zeit zum anzeigen
-	
+	private int maxAll = 10;					//Maximale Anzahl an Objekten in der Welt
+	private int maxIngame = 5;					//Maximale Objekte im Spielfeld
+	private int objCounterAll = 0;			//Anzahl Objekte in der Welt
+	private int objCounterIngame = 0;			//Objekte im Spielfeld
 	/**
 	 * Die Methode die alles einrichtet :P
 	 */
@@ -218,7 +226,7 @@ public class TestPinata extends PApplet {
 		highscore = new Highscore();
 		
 		//Setzte den Default Hashtag
-		hashtag = "Hamburg";
+		hashtag = "bieber";
 		
 		//Setzte Zeitvariablen für den Highscore
 		time = throwtime = millis();
@@ -354,7 +362,20 @@ public class TestPinata extends PApplet {
 	 */
 	public void createWorld() {
 		 physics.setDensity(0.0f);
-		 physics.createRect(getPerX(70), getPerY(0), getPerX(100), getPerY(100));
+		 UserData ud = new UserData();
+		 ud.name = "Sprungbrett";
+		 physics.createRect(getPerX(0), getPerY(10), getPerX(70), getPerY(12)).setUserData(ud);
+		 
+		 UserData ud3 = new UserData();
+		 ud3.name = "Tweets";
+		 physics.createRect(getPerX(70), getPerY(0), getPerX(100), getPerY(100)).setUserData(ud3);
+		 
+		 UserData ud2 = new UserData();
+		 ud2.name = "Wand";
+		 physics.createRect(getPerX(0), getPerY(0), getPerX(0.5f), getPerY(12)).setUserData(ud2);
+		 physics.createRect(getPerX(69.5f), getPerY(0), getPerX(70), getPerY(12)).setUserData(ud2);
+		 physics.createRect(getPerX(0), getPerY(0), getPerX(70), getPerY(0.5f)).setUserData(ud2);
+		 		 
 		 System.out.println("x:"+getPerX(60));
 		 for(int i = 0; i < 10; i++) {
 			 if(i*50 < 550) {
@@ -445,6 +466,12 @@ public class TestPinata extends PApplet {
 			hideHighscore();
 		}
 		
+		System.out.println("HILFE:");
+		System.out.println("maxIngame:"+maxIngame);
+		System.out.println("maxAll:"+maxAll);
+		System.out.println("counter Ingame:"+objCounterIngame);
+		System.out.println("counter All:"+objCounterAll);
+		
 		if( ((time+highscoreswitchTime)-millis()) <= 500) {
 			if(highscoreSwitch) {
 				highscoreswitchTime = switchIn;
@@ -452,23 +479,16 @@ public class TestPinata extends PApplet {
 				highscoreswitchTime = switchOut;
 			}
 			highscoreSwitch = !highscoreSwitch;
-			
-			//System.out.println("--- Highscore ---");
-			//LinkedList<String> names = this.highscore.getName();
-			//LinkedList<Integer> points = this.highscore.getPoints();
-			
-			//for(int i = 0; i < names.size(); i++) {
-			//	System.out.println((i+1) + ". Platz: " + names.get(i) + " mit " + points.get(i) + " Punkten");
-			//}
 			time = millis();
 		}
 		
-		if( ((throwtime+6000)-millis()) <= 500) {
-			if(this.tweets.size() > 0) {
+		if( ((throwtime+1000)-millis()) <= 500) {
+			if(this.tweets.size() > 0 && objCounterAll < maxAll) {
 //				println(Arrays.toString(this.tweets.toArray()));
 				Tweet t = this.tweets.getFirst();
 				this.tweets.removeFirst();
-				createRandomFromTweet(t.name, t.text, (int)random(getPerX(5), getPerX(65)), 50);
+				createRandomFromTweet(t.name, t.text, (int)random(getPerX(5), getPerX(65)), (int)getPerY(5));
+				objCounterAll++;
 			}
 			
 			throwtime = millis();
@@ -476,7 +496,7 @@ public class TestPinata extends PApplet {
 		
 //		crosshair();
 		drawPoints();
-		
+				
 		// Show the gravity
 		stroke(255, 128, 0);
 		Vec2 g = world.getGravity();
@@ -495,7 +515,7 @@ public class TestPinata extends PApplet {
 		// iterate through the bodies
 		Body body;
 		for (body = world.getBodyList(); body != null; body = body.getNext()) {
-
+			
 			// iterate through the shapes of the body
 			org.jbox2d.collision.Shape shape;
 			for (shape = body.getShapeList(); shape != null; shape = shape
@@ -504,26 +524,30 @@ public class TestPinata extends PApplet {
 				// find out the shape type
 				ShapeType st = shape.getType();
 				if (st == ShapeType.POLYGON_SHAPE) {
-
-					// polygon? let's iterate through its vertices while using
-					// begin/endShap()
-					beginShape();
-					PolygonShape poly = (PolygonShape) shape;
-					int count = poly.getVertexCount();
-					Vec2[] verts = poly.getVertices();
-					for (int i = 0; i < count; i++) {
-						Vec2 vert = physics.worldToScreen(body
-								.getWorldPoint(verts[i]));
-						vertex(vert.x, vert.y);
+					UserData ud = (UserData) body.getUserData();
+					
+					if(ud != null) {
+						if(ud.name != "Wand") {
+							// polygon? let's iterate through its vertices while using
+							// begin/endShape()
+							beginShape();
+							PolygonShape poly = (PolygonShape) shape;
+							int count = poly.getVertexCount();
+							Vec2[] verts = poly.getVertices();
+							for (int i = 0; i < count; i++) {
+								Vec2 vert = physics.worldToScreen(body
+										.getWorldPoint(verts[i]));
+								vertex(vert.x, vert.y);
+							}
+							Vec2 firstVert = physics.worldToScreen(body
+									.getWorldPoint(verts[0]));
+							vertex(firstVert.x, firstVert.y);
+							endShape();
+						}
+					}else{
+						//Nichts zeichnen :D
 					}
-					Vec2 firstVert = physics.worldToScreen(body
-							.getWorldPoint(verts[0]));
-					vertex(firstVert.x, firstVert.y);
-					endShape();
-					// Vec2 v = ((PolygonShape) shape).getBody().getPosition();
-					// image(img, physics.worldToScreen(v.x),
-					// physics.worldToScreen(-v.y));
-
+					
 				} else if (st == ShapeType.CIRCLE_SHAPE) {
 					UserData ud = (UserData) body.getUserData();
 					// circle? let's find its center and radius and draw an
@@ -603,9 +627,20 @@ public class TestPinata extends PApplet {
 					float radius = physics.worldToScreen(circle.getRadius());
 					
 					if(ud != null) {
-						//Anti Stuck?
-						body.applyForce(new Vec2(random(-1, 1),0), new Vec2(0,0));
+						FilterData fd = new FilterData();
+						if(objCounterIngame < maxIngame && ud.group != GRUPPE_FALLEND) {
+							objCounterIngame++;
+							ud.group = GRUPPE_FALLEND;
+						}
+						fd.groupIndex = ud.group;
+						shape.setFilterData(fd);
 						
+						//Anti Stuck?
+						if(ud.group == GRUPPE_FALLEND) {
+							body.applyForce(new Vec2(random(-1, 1),0), new Vec2(0,0));
+						}else{
+							body.applyForce(new Vec2(1,5), new Vec2(0,0));
+						}
 						//Follow Texte
 						followText(ud.name, (int)pos.x, (int)pos.y, (int)getPerX(70), (int)getPerY(100));
 						
@@ -618,7 +653,7 @@ public class TestPinata extends PApplet {
 								userText += ud.text.substring(25, 48);
 							} else userText += ud.text.substring(25, ud.text.length()-1);
 						}else{
-							userText += ud.text.substring(0, ud.text.length()-1)+"\n";
+							userText += ud.text.substring(0, ud.text.length())+"\n";
 						}
 							
 						if(playerScores.get(ud.name) != null) {
@@ -628,6 +663,28 @@ public class TestPinata extends PApplet {
 							//Twitter Nachrichten
 							text(ud.name + " ~~ Punkte: (0):\n " + userText, getPerX(71), (int)pos.y);
 						}
+					}else{
+						//Für alle nicht Tweets
+						FilterData fd = new FilterData();
+						fd.groupIndex = GRUPPE_FALLEND;
+						shape.setFilterData(fd);
+					}
+				}else{
+					UserData ud = (UserData) body.getUserData();
+					
+					if(ud != null) {
+						//Für das Sprungbrett
+						FilterData fd = new FilterData();
+						if(ud.name == "Wand" || ud.name == "Sprungbrett")
+							fd.groupIndex = GRUPPE_WARTEND;
+						else
+							fd.groupIndex = GRUPPE_FALLEND;
+						shape.setFilterData(fd);	
+					}else {
+						//Für alle nicht Kreise
+						FilterData fd = new FilterData();
+						fd.groupIndex = GRUPPE_FALLEND;
+						shape.setFilterData(fd);
 					}
 				}
 			}
@@ -826,6 +883,8 @@ public class TestPinata extends PApplet {
 		}
 		
 		if(hasScored) {
+			objCounterIngame--;
+			objCounterAll--;
 			//Dieses try wird komischerweise nur im Offline Modus ausgelöst
 			//Zur sicherheit falls das Internet einmal instabil ist, habe 
 			//ich diesen kleinen Hack eingebaut der alles richtet... warum
