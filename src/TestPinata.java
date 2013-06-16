@@ -207,8 +207,10 @@ public class TestPinata extends PApplet {
 	private int switchIn = 25000;				//Zeit zum anzeigen
 	private int maxAll = 10;					//Maximale Anzahl an Objekten in der Welt
 	private int maxIngame = 5;					//Maximale Objekte im Spielfeld
-	private int objCounterAll = 0;			//Anzahl Objekte in der Welt
+	private int objCounterAll = 0;				//Anzahl Objekte in der Welt
 	private int objCounterIngame = 0;			//Objekte im Spielfeld
+	
+	private boolean jump = false;				//Lässt den nächsten an der reihe springen yaaay :D
 	/**
 	 * Die Methode die alles einrichtet :P
 	 */
@@ -455,7 +457,7 @@ public class TestPinata extends PApplet {
 	 * @param world eine genauere physikalischen angabe der Scene
 	 */
 	public void myCustomRenderer(World world) {
-
+		
 		// clear the background
 		background(255);//0x666666)
 
@@ -465,12 +467,6 @@ public class TestPinata extends PApplet {
 		} else {
 			hideHighscore();
 		}
-		
-		System.out.println("HILFE:");
-		System.out.println("maxIngame:"+maxIngame);
-		System.out.println("maxAll:"+maxAll);
-		System.out.println("counter Ingame:"+objCounterIngame);
-		System.out.println("counter All:"+objCounterAll);
 		
 		if( ((time+highscoreswitchTime)-millis()) <= 500) {
 			if(highscoreSwitch) {
@@ -608,7 +604,13 @@ public class TestPinata extends PApplet {
 			}
 		}
 		// iterate through the bodies
+		LinkedList<Body> bodyList = new LinkedList<>();
 		for (body = world.getBodyList(); body != null; body = body.getNext()) {
+			bodyList.add(body);
+		}
+		
+		for(int i = bodyList.size()-1; i >= 0; i--) {
+		body = bodyList.get(i);
 
 			// iterate through the shapes of the body
 			org.jbox2d.collision.Shape shape;
@@ -622,46 +624,53 @@ public class TestPinata extends PApplet {
 					// circle? let's find its center and radius and draw an
 					// ellipse
 					CircleShape circle = (CircleShape) shape;
-					Vec2 pos = physics.worldToScreen(body.getWorldPoint(circle
-							.getLocalPosition()));
+					Vec2 pos = physics.worldToScreen(body.getWorldPoint(circle.getLocalPosition()));
 					float radius = physics.worldToScreen(circle.getRadius());
-					
 					if(ud != null) {
 						FilterData fd = new FilterData();
 						if(objCounterIngame < maxIngame && ud.group != GRUPPE_FALLEND) {
 							objCounterIngame++;
+							jump = true;
 							ud.group = GRUPPE_FALLEND;
+
 						}
 						fd.groupIndex = ud.group;
 						shape.setFilterData(fd);
 						
 						//Anti Stuck?
-						if(ud.group == GRUPPE_FALLEND) {
-							body.applyForce(new Vec2(random(-1, 1),0), new Vec2(0,0));
-						}else{
-							body.applyForce(new Vec2(1,5), new Vec2(0,0));
+						if(body.isSleeping() || body.isFrozen()) 
+							body.applyForce(new Vec2(random(-1f,1f),0), new Vec2(0,0));
+						
+						if(jump) {
+							jump = false;
+							body.applyImpulse(new Vec2(0,25), body.getLocalCenter());
+							body.setAngularVelocity(0);
 						}
+						
 						//Follow Texte
 						followText(ud.name, (int)pos.x, (int)pos.y, (int)getPerX(70), (int)getPerY(100));
 						
 						//Format user Text
-						fill(128);
-						String userText = "";
-						if(ud.text.length()-1 > 24) {
-							userText += ud.text.substring(0, 25)+"\n";
-							if(ud.text.length()-1 > 48) {
-								userText += ud.text.substring(25, 48);
-							} else userText += ud.text.substring(25, ud.text.length()-1);
-						}else{
-							userText += ud.text.substring(0, ud.text.length())+"\n";
-						}
+						if(ud.group == GRUPPE_FALLEND) {	
+							fill(128);
+							String userText = "";
+							if(ud.text.length()-1 > 24) {
+								userText += ud.text.substring(0, 25)+"\n";
+								if(ud.text.length()-1 > 48) {
+									userText += ud.text.substring(25, 48);
+								} else userText += ud.text.substring(25, ud.text.length()-1);
+							}else{
+								userText += ud.text.substring(0, ud.text.length())+"\n";
+							}
 							
-						if(playerScores.get(ud.name) != null) {
-							//Twitter Nachrichten
-							text(ud.name + " ~~ Punkte: ("+playerScores.get(ud.name)+"):\n " + userText, getPerX(71), (int)pos.y);
-						} else {
-							//Twitter Nachrichten
-							text(ud.name + " ~~ Punkte: (0):\n " + userText, getPerX(71), (int)pos.y);
+								
+							if(playerScores.get(ud.name) != null) {
+								//Twitter Nachrichten
+								text(ud.name + " ~~ Punkte: ("+playerScores.get(ud.name)+"):\n " + userText, getPerX(71), (int)pos.y);
+							} else {
+								//Twitter Nachrichten
+								text(ud.name + " ~~ Punkte: (0):\n " + userText, getPerX(71), (int)pos.y);
+							}
 						}
 					}else{
 						//Für alle nicht Tweets
@@ -736,6 +745,7 @@ public class TestPinata extends PApplet {
 		ud.text = text.replace("\n","")
 						.replace(" fuck ", "****");
 		ud.image = (int) (Math.random() * 3)+1;
+		ud.group = GRUPPE_WARTEND;
 
 		physics.setDensity(1.0f);
 		physics.setFriction(1.0f);
