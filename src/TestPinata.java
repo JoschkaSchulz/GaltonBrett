@@ -15,16 +15,10 @@
  * 			- Änderbarer Suchfilter
  */
 
-import java.awt.Font;
 import java.awt.Frame;
-import java.io.BufferedReader;
-import java.io.InputStreamReader;
-import java.net.URL;
-import java.util.Arrays;
 import java.util.HashMap;
-import java.util.LinkedHashMap;
 import java.util.LinkedList;
-import java.util.Map.Entry;
+import java.util.List;
 
 import org.jbox2d.collision.CircleShape;
 import org.jbox2d.collision.FilterData;
@@ -32,14 +26,19 @@ import org.jbox2d.collision.PolygonShape;
 import org.jbox2d.collision.ShapeType;
 import org.jbox2d.common.Vec2;
 import org.jbox2d.dynamics.Body;
-import org.jbox2d.dynamics.BodyDef;
 import org.jbox2d.dynamics.World;
 import org.jbox2d.p5.Physics;
-import org.json.*;
 
 import processing.core.PApplet;
 import processing.core.PFont;
 import processing.core.PImage;
+import twitter4j.Query;
+import twitter4j.QueryResult;
+import twitter4j.Status;
+import twitter4j.Twitter;
+import twitter4j.TwitterException;
+import twitter4j.TwitterFactory;
+import twitter4j.conf.ConfigurationBuilder;
 
 public class TestPinata extends PApplet {	
 	/**
@@ -192,8 +191,8 @@ public class TestPinata extends PApplet {
 	private PFont font;				//Standardschriftart der Applikation
 	
 	//Eigenschaften für die Fenstergröße
-	public static final int SCREEN_W = 800;//1920;	//Auflösung breite
-	public static final int SCREEN_H = 480;//1080;	//Auflösung höhe
+	public static final int SCREEN_W = 800;//1920	//Auflösung breite
+	public static final int SCREEN_H = 480;//1080//Auflösung höhe
 	
 	private String hashtag;		//Der Hashtag nachdem geschaut werden soll
 	private int textHeight;	//Die Texthöhe
@@ -211,6 +210,8 @@ public class TestPinata extends PApplet {
 	private int objCounterIngame = 0;			//Objekte im Spielfeld
 	
 	private boolean jump = false;				//Lässt den nächsten an der reihe springen yaaay :D
+	
+	private PImage rainbowstardust;
 	/**
 	 * Die Methode die alles einrichtet :P
 	 */
@@ -242,6 +243,9 @@ public class TestPinata extends PApplet {
 		
 		img3 = loadImage("oranges_monster1.png");
 		img3.resize(width/32,width/32);
+		
+		rainbowstardust = loadImage("rainbowstardust.jpg");
+		rainbowstardust.resize((int)getPerX(70), (int)getPerY(12));
 		
 		//Font erstellen und Texthöhe bestellen
 		textHeight = width/64;
@@ -305,46 +309,39 @@ public class TestPinata extends PApplet {
 	/**
 	 * Die Methode twitterReader wird vom Thread verwendet und ganz am Anfang
 	 * in der Setup einmal um die Twitternachrichten sortiert nach dem Hashtag
-	 * auszulesen.
+	 * auszulesen. 
 	 */
-	public void twitterReader() { //PiniataCookie
-		//Bieber stress test!
-		String urlst = "http://search.twitter.com/search.json?q="+hashtag;
-		URL url;
-		StringBuffer buff = new StringBuffer(); 
-		try {
-			url = new URL(urlst);
-			BufferedReader br = new BufferedReader(new InputStreamReader(url.openConnection().getInputStream()));
-			
-			int c;  
-	        while((c=br.read())!=-1)  
-	        {  
-	            buff.append((char)c);  
-	        }  
-	        br.close();
-	        
-	        //System.out.println(buff.toString());
-	        
-	        JSONObject js = new JSONObject(buff.toString());
-	        JSONArray tweets = js.getJSONArray("results");  
-	        JSONObject tweet;  
-	        for(int i=tweets.length()-1;i>=0;i--) {  
-	            tweet = tweets.getJSONObject(i);
-	            if(lastTweet < Long.parseLong(tweet.getString("id_str"))) {
-	            	lastTweet = Long.parseLong(tweet.getString("id_str"));
-	            	if(!firstRun) {
-	            		Tweet t = new Tweet();
-		            	t.name = tweet.getString("from_user");
-		            	t.text = tweet.getString("text");
-		            	this.tweets.add(t);
-	            	}
-	            }
-		    } 
-	        firstRun = false;
-		} catch (Exception e) {
-			//e.printStackTrace();
-		}  
-	}
+	public void twitterReader(){ //PiniataCookie
+		 ConfigurationBuilder cb = new ConfigurationBuilder();
+		    cb.setDebugEnabled(true)
+		          .setOAuthConsumerKey("gzCi9DsYOm0Kz0suYVtgkQ")
+		          .setOAuthConsumerSecret("Ik0bwVJK9lAeorFTZExfXWU3nKIYAcfIlaMBxrUgo")
+		          .setOAuthAccessToken("321200704-bZY4itwZKzPrkkoIizrMV8a08IILpOzwGK42cDEe")
+		          .setOAuthAccessTokenSecret("6DBtXmvafqMJOW8bozUrQjxJM1u30KPN9nkFeSbp05E");
+		    TwitterFactory tf = new TwitterFactory(cb.build());
+		    Twitter twitter = tf.getInstance();
+		        try {
+		            Query query = new Query(this.hashtag);
+		            QueryResult result;
+		            result = twitter.search(query);
+		            List<Status> tweets = result.getTweets();
+		            for (int i=tweets.size()-1;i>=0;i--) {//Status tweet : tweets) {
+		            	Status tweet = tweets.get(i);
+		            	if(lastTweet < tweet.getId()) {
+		            		lastTweet = tweet.getId();
+		            		if(!firstRun) {
+				            	Tweet t = new Tweet();
+				            	t.name = tweet.getUser().getScreenName();
+				            	t.text = tweet.getText();
+				            	this.tweets.add(t);
+		            		}else{
+		            			firstRun = false;
+		            		}
+		            	}
+		            }
+		        } catch (TwitterException te) {
+		        }
+		}
 	
 	//Variablen zum Kontrollieren der Eigenschaften des Welteninhalts
 	private float minG = 0.5f;		//Minimaler Rückstoß der Bumper
@@ -489,9 +486,11 @@ public class TestPinata extends PApplet {
 			
 			throwtime = millis();
 		}
+		drawBackground();
 		
 //		crosshair();
 		drawPoints();
+
 				
 		// Show the gravity
 		stroke(255, 128, 0);
@@ -508,6 +507,7 @@ public class TestPinata extends PApplet {
 		
 		noFill();
 		
+		
 		// iterate through the bodies
 		Body body;
 		for (body = world.getBodyList(); body != null; body = body.getNext()) {
@@ -523,7 +523,7 @@ public class TestPinata extends PApplet {
 					UserData ud = (UserData) body.getUserData();
 					
 					if(ud != null) {
-						if(ud.name != "Wand") {
+						if(ud.name != "Wand" && ud.name != "Sprungbrett") {
 							// polygon? let's iterate through its vertices while using
 							// begin/endShape()
 							beginShape();
@@ -540,8 +540,6 @@ public class TestPinata extends PApplet {
 							vertex(firstVert.x, firstVert.y);
 							endShape();
 						}
-					}else{
-						//Nichts zeichnen :D
 					}
 					
 				} else if (st == ShapeType.CIRCLE_SHAPE) {
@@ -684,10 +682,13 @@ public class TestPinata extends PApplet {
 					if(ud != null) {
 						//Für das Sprungbrett
 						FilterData fd = new FilterData();
-						if(ud.name == "Wand" || ud.name == "Sprungbrett")
+						if(ud.name == "Wand") {
 							fd.groupIndex = GRUPPE_WARTEND;
-						else
+						}else if (ud.name == "Sprungbrett") {
+							fd.groupIndex = GRUPPE_WARTEND;
+						}else {
 							fd.groupIndex = GRUPPE_FALLEND;
+						}
 						shape.setFilterData(fd);	
 					}else {
 						//Für alle nicht Kreise
@@ -727,6 +728,18 @@ public class TestPinata extends PApplet {
 		line(crosshairX,crosshairY,crosshairX,crosshairY-30);
 		line(crosshairX,crosshairY,crosshairX+30,crosshairY);
 		line(crosshairX,crosshairY,crosshairX-30,crosshairY);
+	}
+	
+	private void drawBackground() {
+		fill(0);
+		stroke(0);
+		rect(getPerX(0),getPerY(0),getPerX(70),getPerY(100));
+		
+		fill(255,255,0);
+		stroke(255,255,0);
+		
+		
+		image(rainbowstardust, getPerY(0), getPerY(9));	// http://www.flickr.com/photos/58782395@N03/5519581506/
 	}
 	
 	/**
